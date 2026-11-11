@@ -32,6 +32,7 @@ pub(crate) mod layout_key;
 mod line_break;
 pub(crate) mod misc;
 pub(crate) mod number_shaping;
+mod omni_paths;
 pub(crate) mod path_cache;
 pub(crate) mod retained;
 pub(crate) mod rounded_clip;

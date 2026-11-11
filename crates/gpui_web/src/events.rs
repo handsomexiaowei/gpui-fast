@@ -549,6 +549,7 @@ impl WebWindowInner {
             key_char: None,
         };
         self.dispatch_input(PlatformInput::KeyDown(KeyDownEvent {
+            shift_digit: None,
             keystroke: keystroke.clone(),
             is_held: false,
             prefer_character_input: false,

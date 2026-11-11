@@ -1327,6 +1327,18 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn on_appearance_changed(&self, callback: Box<dyn FnMut()>);
     fn on_button_layout_changed(&self, _callback: Box<dyn FnMut()>) {}
     fn draw(&self, scene: &Scene);
+
+    fn supports_render_capture(&self) -> bool {
+        false
+    }
+    fn render_capture(
+        &self,
+        _scene: &Scene,
+        _region: Bounds<DevicePixels>,
+    ) -> Result<image::RgbaImage> {
+        anyhow::bail!("Render capture is unavailable on this window backend")
+    }
+    fn completed_frame(&self) {}
     fn draw_composed(&self, scene: crate::fast::composition::ComposedScene<'_>) {
         crate::fast::composition::draw_uncomposed(self, scene)
     }

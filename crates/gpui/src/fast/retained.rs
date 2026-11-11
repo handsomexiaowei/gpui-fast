@@ -370,6 +370,7 @@ impl PartialEq for PaintIndex {
     fn eq(&self, other: &Self) -> bool {
         let PaintIndex {
             scene_index,
+            capture_layers_index,
             #[cfg(any(test, feature = "test-support"))]
             debug_bounds_index,
             fast,
@@ -382,6 +383,7 @@ impl PartialEq for PaintIndex {
         } = self;
         *fast == other.fast
             && *scene_index == other.scene_index
+            && *capture_layers_index == other.capture_layers_index
             && *mouse_listeners_index == other.mouse_listeners_index
             && *input_handlers_index == other.input_handlers_index
             && *cursor_styles_index == other.cursor_styles_index
@@ -403,6 +405,7 @@ impl PaintIndex {
     pub(crate) fn shifted(&self, from: &Self, to: &Self) -> Self {
         PaintIndex {
             scene_index: self.scene_index - from.scene_index + to.scene_index,
+            capture_layers_index: self.capture_layers_index - from.capture_layers_index + to.capture_layers_index,
             #[cfg(any(test, feature = "test-support"))]
             debug_bounds_index: self.debug_bounds_index - from.debug_bounds_index
                 + to.debug_bounds_index,

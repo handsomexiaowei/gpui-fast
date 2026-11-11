@@ -427,6 +427,7 @@ impl WindowsWindowInner {
             &self.state,
             |keystroke, prefer_character_input| {
                 PlatformInput::KeyDown(KeyDownEvent {
+                    shift_digit: None,
                     keystroke,
                     is_held: lparam.0 & (0x1 << 30) > 0,
                     prefer_character_input,

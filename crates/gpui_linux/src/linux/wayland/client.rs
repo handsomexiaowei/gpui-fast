@@ -2230,6 +2230,7 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandClientStatePtr {
                             state.compose_state = Some(compose);
                         }
                         let input = PlatformInput::KeyDown(KeyDownEvent {
+                            shift_digit: None,
                             keystroke: keystroke.clone(),
                             is_held: false,
                             prefer_character_input: false,
@@ -2245,6 +2246,7 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandClientStatePtr {
                             .loop_handle
                             .insert_source(Timer::from_duration(state.repeat.delay), {
                                 let input = PlatformInput::KeyDown(KeyDownEvent {
+                                    shift_digit: None,
                                     keystroke,
                                     is_held: true,
                                     prefer_character_input: false,

@@ -1826,6 +1826,7 @@ impl WgpuRendererCore {
     ) -> Result<()> {
         let first_path = &paths[0];
         let sprites: Vec<PathSprite> = if paths.last().map(|p| &p.order) == Some(&first_path.order)
+            && gpui::Path::can_composite_separately(paths)
         {
             paths
                 .iter()

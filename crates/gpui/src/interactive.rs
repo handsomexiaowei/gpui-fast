@@ -23,6 +23,8 @@ pub trait GestureEvent: InputEvent {}
 /// The key down event equivalent for the platform.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct KeyDownEvent {
+    /// Physical digit reported separately from the shifted character.
+    pub shift_digit: Option<u8>,
     /// The keystroke that was generated.
     pub keystroke: Keystroke,
 

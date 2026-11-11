@@ -18,7 +18,7 @@ use crate::{
     PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
     PolychromeSprite, Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams,
     RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
-    ScaledPixels, Scene, Shadow, SharedString, Size, StrikethroughStyle, Style, SubpixelSprite,
+    ScaledPixels, Scene, Shadow, SharedString, Size, StrikethroughStyle, Style,
     Subscription, SystemWindowTab, SystemWindowTabController, TabStopMap, Task,
     TextInputConfiguration, TextInputStateChange, TextRenderingMode, TextStyle,
     TextStyleRefinement, ThermalState, TransformationMatrix, Underline, UnderlineStyle,
@@ -1041,6 +1041,11 @@ pub(crate) struct DeferredDraw {
     pub(crate) enclosing_retained: crate::fast::retained::EnclosingRetained,
 }
 
+#[path = "fast/omni_capture.rs"]
+mod omni_capture;
+#[path = "fast/omni_glyph.rs"]
+mod omni_glyph;
+
 pub(crate) struct Frame {
     pub(crate) focus: Option<FocusId>,
     pub(crate) window_active: bool,
@@ -1049,6 +1054,7 @@ pub(crate) struct Frame {
     pub(crate) mouse_listeners: Vec<Option<AnyMouseListener>>,
     pub(crate) dispatch_tree: DispatchTree,
     pub(crate) scene: Scene,
+    capture_layers: Vec<omni_capture::RenderCaptureLayer>,
     pub(crate) fast_composition_starts: crate::fast::composition::SurfaceStarts,
     pub(crate) fast_composition_input: crate::fast::composition::SurfaceInput,
     pub(crate) hitboxes: Vec<Hitbox>,
@@ -1083,6 +1089,7 @@ pub(crate) struct PrepaintStateIndex {
 #[derive(Clone, Default)]
 pub(crate) struct PaintIndex {
     pub(crate) scene_index: usize,
+    pub(crate) capture_layers_index: usize,
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) debug_bounds_index: usize,
     pub(crate) fast: crate::fast::retained::FastPaintIndex,
@@ -1110,6 +1117,7 @@ impl Frame {
             mouse_listeners: Vec::new(),
             dispatch_tree,
             scene: Scene::default(),
+            capture_layers: Vec::new(),
             fast_composition_starts: crate::fast::composition::SurfaceStarts::default(),
             fast_composition_input: crate::fast::composition::SurfaceInput::default(),
             hitboxes: Vec::new(),
@@ -1140,6 +1148,7 @@ impl Frame {
         self.mouse_listeners.clear();
         self.dispatch_tree.clear();
         self.scene.clear();
+        self.capture_layers.clear();
         crate::fast::composition::SurfaceStarts::clear(&mut self.fast_composition_starts);
         self.input_handlers.clear();
         self.tooltip_requests.clear();
@@ -4349,6 +4358,7 @@ impl Window {
     pub(crate) fn paint_index(&self) -> PaintIndex {
         PaintIndex {
             scene_index: self.next_frame.scene.len(),
+            capture_layers_index: self.next_frame.capture_layers.len(),
             #[cfg(any(test, feature = "test-support"))]
             debug_bounds_index: self.next_frame.debug_bounds_records.len(),
             fast: crate::fast::retained::FastPaintIndex::new(self),
@@ -4403,6 +4413,16 @@ impl Window {
 
         self.text_system
             .reuse_layouts(range.start.line_layout_index..range.end.line_layout_index);
+        let new_start = self.next_frame.scene.len();
+        self.next_frame.capture_layers.extend(
+            self.rendered_frame.capture_layers
+                [range.start.capture_layers_index..range.end.capture_layers_index]
+                .iter().cloned().map(|mut layer| {
+                    layer.operations = new_start + (layer.operations.start - range.start.scene_index)
+                        ..new_start + (layer.operations.end - range.start.scene_index);
+                    layer
+                }),
+        );
         self.next_frame.scene.replay(
             range.start.scene_index..range.end.scene_index,
             &self.rendered_frame.scene,
@@ -5135,64 +5155,7 @@ impl Window {
         font_size: Pixels,
         color: Hsla,
     ) -> Result<()> {
-        self.invalidator.debug_assert_paint();
-
-        let element_opacity = self.element_opacity();
-        let scale_factor = self.scale_factor();
-        let glyph_origin = origin.scale(scale_factor);
-
-        let (integer_origin, subpixel_variant) = crate::fast::glyphs::quantize_origin(glyph_origin);
-        let subpixel_rendering = self.should_use_subpixel_rendering(font_id, font_size);
-        let dilation = self.text_system().glyph_dilation_for_color(color);
-        let params = RenderGlyphParams {
-            font_id,
-            glyph_id,
-            font_size,
-            subpixel_variant,
-            scale_factor,
-            is_emoji: false,
-            subpixel_rendering,
-            dilation,
-        };
-
-        let raster_bounds = self.text_system().raster_bounds(&params)?;
-        if !raster_bounds.is_zero() {
-            let tile = self
-                .sprite_atlas
-                .get_or_insert_with(params.clone().into(), &mut || {
-                    let (size, bytes) = self.text_system().rasterize_glyph(&params)?;
-                    Ok(Some((size, Cow::Owned(bytes))))
-                })?
-                .expect("Callback above only errors or returns Some");
-            let bounds = Bounds {
-                origin: integer_origin + raster_bounds.origin.map(Into::into),
-                size: tile.bounds.size.map(Into::into),
-            };
-            let content_mask = self.snapped_content_mask();
-
-            if subpixel_rendering {
-                self.next_frame.scene.insert_primitive(SubpixelSprite {
-                    order: 0,
-                    pad: 0,
-                    bounds,
-                    content_mask,
-                    color: color.opacity(element_opacity),
-                    tile,
-                    transformation: TransformationMatrix::unit(),
-                });
-            } else {
-                self.next_frame.scene.insert_primitive(MonochromeSprite {
-                    order: 0,
-                    pad: 0,
-                    bounds,
-                    content_mask,
-                    color: color.opacity(element_opacity),
-                    tile,
-                    transformation: TransformationMatrix::unit(),
-                });
-            }
-        }
-        Ok(())
+        self.paint_transformed_glyph(origin, font_id, glyph_id, font_size, color, TransformationMatrix::unit())
     }
 
     pub(crate) fn should_use_subpixel_rendering(&self, font_id: FontId, font_size: Pixels) -> bool {
@@ -5878,6 +5841,7 @@ impl Window {
         let keystroke = keystroke.with_simulated_ime();
         let result = self.dispatch_event(
             PlatformInput::KeyDown(KeyDownEvent {
+                shift_digit: None,
                 keystroke: keystroke.clone(),
                 is_held: false,
                 prefer_character_input: false,
@@ -6783,6 +6747,7 @@ impl Window {
 
         'replay: for replay in replays {
             let event = KeyDownEvent {
+                shift_digit: None,
                 keystroke: replay.keystroke.clone(),
                 is_held: false,
                 prefer_character_input: true,
@@ -9442,6 +9407,7 @@ mod tests {
             window.draw(cx).clear(cx);
             window.dispatch_event(
                 PlatformInput::KeyDown(KeyDownEvent {
+                    shift_digit: None,
                     keystroke: Keystroke::parse("down").expect("valid keystroke"),
                     is_held: false,
                     prefer_character_input: false,

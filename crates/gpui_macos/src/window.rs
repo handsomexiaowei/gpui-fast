@@ -2155,6 +2155,24 @@ impl PlatformWindow for MacWindow {
         this.renderer.draw(scene);
     }
 
+    fn supports_render_capture(&self) -> bool {
+        true
+    }
+
+    fn render_capture(
+        &self,
+        scene: &gpui::Scene,
+        region: gpui::Bounds<gpui::DevicePixels>,
+    ) -> anyhow::Result<image::RgbaImage> {
+        let image = self.0.lock().renderer.render_to_image(scene)?;
+        let left = region.origin.x.0.max(0) as u32;
+        let top = region.origin.y.0.max(0) as u32;
+        let width = (region.size.width.0.max(0) as u32).min(image.width().saturating_sub(left));
+        let height = (region.size.height.0.max(0) as u32).min(image.height().saturating_sub(top));
+        anyhow::ensure!(width > 0 && height > 0, "Capture bounds are empty");
+        Ok(image::imageops::crop_imm(&image, left, top, width, height).to_image())
+    }
+
     fn draw_composed(&self, scene: gpui::ComposedScene<'_>) {
         crate::fast::composition::draw_composed(&self.0, scene)
     }
@@ -3652,6 +3670,7 @@ extern "C" fn do_command_by_selector(this: &AnyObject, _: Sel, _: Sel) {
 
     if let Some((keystroke, callback)) = keystroke.zip(event_callback.as_mut()) {
         let handled = (callback)(PlatformInput::KeyDown(KeyDownEvent {
+            shift_digit: None,
             keystroke,
             is_held: false,
             prefer_character_input: false,

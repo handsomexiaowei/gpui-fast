@@ -92,7 +92,7 @@ impl Scene {
     pub fn insert_primitive(&mut self, primitive: impl Into<Primitive>) {
         let mut primitive = primitive.into();
         let clipped_bounds = primitive
-            .bounds()
+            .paint_bounds()
             .intersect(&primitive.content_mask().bounds);
 
         if clipped_bounds.is_empty() {
@@ -242,6 +242,14 @@ impl Primitive {
             Primitive::SubpixelSprite(sprite) => &sprite.bounds,
             Primitive::PolychromeSprite(sprite) => &sprite.bounds,
             Primitive::Surface(surface) => &surface.bounds,
+        }
+    }
+
+    fn paint_bounds(&self) -> Bounds<ScaledPixels> {
+        match self {
+            Primitive::MonochromeSprite(sprite) => sprite.transformation.paint_bounds(sprite.bounds),
+            Primitive::SubpixelSprite(sprite) => sprite.transformation.paint_bounds(sprite.bounds),
+            _ => *self.bounds(),
         }
     }
 
@@ -696,6 +704,20 @@ impl TransformationMatrix {
             }
         }
         Point::new(output[0].into(), output[1].into())
+    }
+    fn paint_bounds(&self, bounds: Bounds<ScaledPixels>) -> Bounds<ScaledPixels> {
+        if *self == Self::unit() {
+            return bounds;
+        }
+        let project = |point: Point<ScaledPixels>| {
+            self.apply(point.map(|coordinate| Pixels::from(coordinate.0)))
+                .map(|coordinate| ScaledPixels(coordinate.0))
+        };
+        let a = project(bounds.origin);
+        let b = project(bounds.top_right());
+        let c = project(bounds.bottom_left());
+        let d = project(bounds.bottom_right());
+        Bounds::from_corners(a.min(&b).min(&c).min(&d), a.max(&b).max(&c).max(&d))
     }
 }
 

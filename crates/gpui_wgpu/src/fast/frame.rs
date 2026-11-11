@@ -384,7 +384,8 @@ fn plan_paths(
         }
 
         let first_sprite = sprites.len() as u32;
-        if paths.last().map(|p| &p.order) == Some(&first_path.order) {
+        if paths.last().map(|p| &p.order) == Some(&first_path.order)
+            && gpui::Path::can_composite_separately(paths) {
             sprites.extend(paths.iter().map(|p| PathSprite {
                 bounds: p.clipped_bounds(),
             }));

@@ -98,7 +98,7 @@ pub(crate) fn key_to_menu_equivalent(key: &str) -> Cow<'_, str> {
     Cow::Owned(String::from_utf16(&[code as u16]).unwrap())
 }
 
-fn read_modifiers(native_event: &NSEvent) -> Modifiers {
+pub(crate) fn read_modifiers(native_event: &NSEvent) -> Modifiers {
     let modifiers = native_event.modifierFlags();
     let control = modifiers.contains(NSEventModifierFlags::Control);
     let alt = modifiers.contains(NSEventModifierFlags::Option);
@@ -144,6 +144,7 @@ pub(crate) unsafe fn platform_input_from_native(
                 }))
             }
             NSEventType::KeyDown => Some(PlatformInput::KeyDown(KeyDownEvent {
+                shift_digit: crate::fast::omni_input::shift_digit(native_event),
                 keystroke: parse_keystroke(native_event),
                 is_held: native_event.isARepeat(),
                 prefer_character_input: false,

@@ -900,6 +900,7 @@ mod tests {
         cx.update(|window, cx| {
             window.dispatch_event(
                 PlatformInput::KeyDown(KeyDownEvent {
+                    shift_digit: None,
                     keystroke: Keystroke {
                         key_char: Some("ą".into()),
                         ..Keystroke::parse("ctrl-alt-a").expect("valid keystroke")

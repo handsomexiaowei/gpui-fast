@@ -1207,6 +1207,7 @@ impl X11Client {
                 };
                 drop(state);
                 window.handle_input(PlatformInput::KeyDown(gpui::KeyDownEvent {
+                    shift_digit: None,
                     keystroke,
                     is_held: false,
                     prefer_character_input: false,
